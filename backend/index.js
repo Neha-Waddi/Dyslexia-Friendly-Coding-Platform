@@ -2,8 +2,35 @@ const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
 const { exec } = require("child_process");
+const axios = require("axios");
 const generateFlowchart = require("./flowchart");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
+require('dotenv').config();
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+// Helper function to get error explanation
+async function getErrorExplanation(code, language, error) {
+  try {
+    const prompt = `
+You are an assistant helping beginner programmers understand errors.
+The following ${language} code produced this error:
+${error}
+
+Code:
+${code}
+
+Provide a short explanation: what the error means and how to fix it. Keep it concise.
+`;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    return response.text();
+  } catch (e) {
+    return "Unable to generate explanation. " + simplifyError(error, language);
+  }
+}
 // Initialize Express app
 const app = express();
 const PORT = 5000;
@@ -78,10 +105,9 @@ app.post("/run", async (req, res) => {
         }
 
         if (err) {
-          const simplified = simplifyError(stderr, "Python");
+          const explanation = await getErrorExplanation(code, "python", stderr);
           return res.json({
-            error: stderr,
-            simplified: simplified,
+            error: explanation,
           });
         }
         
@@ -111,10 +137,9 @@ app.post("/run", async (req, res) => {
           res.json({ output: "Code executed successfully" });
         }
       } catch (jsErr) {
-        const simplified = simplifyError(jsErr.message, "JavaScript");
+        const explanation = await getErrorExplanation(code, "javascript", jsErr.message);
         res.json({
-          error: jsErr.message,
-          simplified: simplified,
+          error: explanation,
         });
       }
     } else {
@@ -122,8 +147,7 @@ app.post("/run", async (req, res) => {
     }
   } catch (e) {
     res.json({ 
-      error: e.message,
-      simplified: "An unexpected error occurred while running your code."
+      error: "An unexpected error occurred while running your code."
     });
   }
 });
@@ -144,6 +168,59 @@ app.post("/flowchart", (req, res) => {
     res.json({ 
       chart: "",
       error: "Could not generate flowchart" 
+    });
+  }
+});
+
+// Explain code endpoint
+app.post("/explain", async (req, res) => {
+  try {
+    const { code, language, error } = req.body;
+    
+    if (error) {
+      // Explain the error
+      const prompt = `
+You are an assistant helping beginner programmers understand errors.
+The following ${language} code produced this error:
+${error}
+
+Code:
+${code}
+
+Provide a short explanation: what the error means and how to fix it. Keep it concise.
+`;
+      
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const explanation = response.text();
+      res.json({ explanation });
+    } else {
+      // Explain the code
+      if (!code || code.trim().length === 0) {
+        return res.json({ explanation: "No code provided to explain." });
+      }
+      
+      const prompt = `
+You are an assistant helping beginner programmers understand code.
+Explain the following ${language} code in simple, easy-to-understand terms.
+Break it down step by step: what the code does, how it works, and any important concepts.
+
+Code:
+${code}
+
+Explanation:
+`;
+      
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const explanation = response.text();
+      res.json({ explanation });
+    }
+  } catch (apiError) {
+    console.error("Explanation generation error:", apiError);
+    res.json({ 
+      explanation: "Could not generate explanation. Please check your code and try again.",
+      error: apiError.message 
     });
   }
 });

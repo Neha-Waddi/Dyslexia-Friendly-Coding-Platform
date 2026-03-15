@@ -17,6 +17,7 @@ export default function Playground() {
   const [language, setLanguage] = useState("python");
   const [output, setOutput] = useState("");
   const [error, setError] = useState("");
+  const [explanation, setExplanation] = useState("");
   const [flowchart, setFlowchart] = useState("");
   const [editorHeight, setEditorHeight] = useState(50); // percentage
   const [editorWidth, setEditorWidth] = useState(70); // percentage of main area
@@ -32,6 +33,7 @@ const themeClasses = {
   const runCode = async () => {
   setOutput("");
   setError("");
+  setExplanation("");
   setFlowchart("");
 
   try {
@@ -52,6 +54,20 @@ const themeClasses = {
       setOutput(result || "Python code executed successfully");
     }
 
+    // Request code explanation from backend
+    try {
+      const resp = await fetch("http://localhost:5000/explain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, language }),
+      });
+      const data = await resp.json();
+      setExplanation(data.explanation || "Could not generate explanation.");
+    } catch (expErr) {
+      console.error("Explanation API error", expErr);
+      setExplanation("Could not generate explanation.");
+    }
+
     // Request accurate flowchart from backend parser
     try {
       const resp = await fetch("http://localhost:5000/flowchart", {
@@ -67,9 +83,26 @@ const themeClasses = {
     }
 
   } catch (err) {
-    setError(err.message);
+    // Try to get simplified error explanation
+    try {
+      const resp = await fetch("http://localhost:5000/explain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, language, error: err.message }),
+      });
+      const data = await resp.json();
+      if (data.explanation) {
+        setError(data.explanation);
+      } else {
+        setError("An error occurred, but could not generate explanation.");
+      }
+    } catch (expErr) {
+      console.error("Error explanation API error", expErr);
+      setError("An error occurred while running your code.");
+    }
+    }
   }
-};
+
 
   return (
     <div className={`flex h-screen ${themeClasses[theme]}`}>
@@ -128,7 +161,7 @@ const themeClasses = {
 
           <div style={{ height: `${100 - editorHeight}%` }} className="overflow-hidden">
             <ErrorBoundary>
-              <OutputPanel output={output} error={error} />
+              <OutputPanel output={output} error={error} explanation={explanation} />
             </ErrorBoundary>
           </div>
         </div>

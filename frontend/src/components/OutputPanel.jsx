@@ -3,7 +3,7 @@ import { useContext } from "react";
 import { AccessibilityContext } from "../context/AccessibilityContext";
 import { Volume2 } from "lucide-react";
 
-export default function OutputPanel({ output, error }) {
+export default function OutputPanel({ output, error, explanation }) {
   const { speak } = useTTS();
   const { theme } = useContext(AccessibilityContext);
 
@@ -29,8 +29,8 @@ export default function OutputPanel({ output, error }) {
     <div className={`h-full p-4 border-t overflow-y-auto flex flex-col ${panelThemeClasses[theme]}`}>
       <div className="flex justify-between mb-2">
         <h3>Output</h3>
-        {(output || error) && (
-          <button onClick={() => speak(output || error)}>
+        {(output || error || explanation) && (
+          <button onClick={() => speak((output || error || "") + " " + explanation)}>
             <Volume2 size={14} />
           </button>
         )}
@@ -38,6 +38,12 @@ export default function OutputPanel({ output, error }) {
 
       {error && <pre className={outputErrorThemeClasses[theme]}>{error}</pre>}
       {output && <pre className={outputSuccessThemeClasses[theme]}>{output}</pre>}
+      {explanation && (
+        <div className="mt-4">
+          <h4 className="font-semibold mb-2">Explanation:</h4>
+          <pre className="whitespace-pre-wrap text-sm">{explanation}</pre>
+        </div>
+      )}
     </div>
   );
 }
