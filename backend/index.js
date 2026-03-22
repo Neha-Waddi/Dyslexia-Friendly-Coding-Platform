@@ -14,19 +14,21 @@ const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 // Helper function to get error explanation
 async function getErrorExplanation(code, language, error) {
   try {
-    const prompt = `
-You are an assistant helping beginner programmers understand errors.
-The following ${language} code produced this error:
-${error}
+    const prompt = `You are a brief error explainer for beginners.
+ONLY give a 1-2 sentence explanation of the error and how to fix it.
+NO long explanations. NO concept breakdowns. NO examples.
+Just the error meaning and the fix.
 
 Code:
 ${code}
 
-Provide a short explanation: what the error means and how to fix it. Keep it concise.
-`;
+Error:
+${error}
+
+Brief explanation (1-2 sentences only):`;
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    return response.text();
+    return response.text().trim();
   } catch (e) {
     return "Unable to generate explanation. " + simplifyError(error, language);
   }
@@ -179,20 +181,22 @@ app.post("/explain", async (req, res) => {
     
     if (error) {
       // Explain the error
-      const prompt = `
-You are an assistant helping beginner programmers understand errors.
-The following ${language} code produced this error:
-${error}
+      const prompt = `You are a brief error explainer for beginners.
+ONLY give a 1-2 sentence explanation of the error and how to fix it.
+NO long explanations. NO concept breakdowns. NO examples.
+Just the error meaning and the fix.
 
 Code:
 ${code}
 
-Provide a short explanation: what the error means and how to fix it. Keep it concise.
-`;
+Error:
+${error}
+
+Brief explanation (1-2 sentences only):`;
       
       const result = await model.generateContent(prompt);
       const response = await result.response;
-      const explanation = response.text();
+      const explanation = response.text().trim();
       res.json({ explanation });
     } else {
       // Explain the code
@@ -200,20 +204,19 @@ Provide a short explanation: what the error means and how to fix it. Keep it con
         return res.json({ explanation: "No code provided to explain." });
       }
       
-      const prompt = `
-You are an assistant helping beginner programmers understand code.
-Explain the following ${language} code in simple, easy-to-understand terms.
-Break it down step by step: what the code does, how it works, and any important concepts.
+      const prompt = `You are a brief code explainer for beginners.
+ONLY give a 1-2 sentence explanation of what this code does.
+NO step-by-step breakdown. NO detailed explanations of concepts. NO examples.
+Just the main action in simple words.
 
 Code:
 ${code}
 
-Explanation:
-`;
+Brief explanation (1-2 sentences only):`;
       
       const result = await model.generateContent(prompt);
       const response = await result.response;
-      const explanation = response.text();
+      const explanation = response.text().trim();
       res.json({ explanation });
     }
   } catch (apiError) {
