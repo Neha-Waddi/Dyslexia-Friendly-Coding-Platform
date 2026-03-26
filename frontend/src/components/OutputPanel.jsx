@@ -40,7 +40,7 @@ const parseExplanation = (text) => {
   });
 };
 
-export default function OutputPanel({ output, error, explanation }) {
+export default function OutputPanel({ output, error, explanation, htmlPreview }) {
   const { speak, stop } = useTTS();
   const [isSpeaking, setIsSpeaking] = useState(false);
   const { theme, fontFamily, fontSize, lineHeight } = useContext(AccessibilityContext);
@@ -226,6 +226,25 @@ export default function OutputPanel({ output, error, explanation }) {
                 >
                   {output}
                 </pre>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {htmlPreview && (
+          <div className={`p-4 border-l-4 rounded-lg transform transition-all ${outputBoxClasses[theme]}`}>
+            <div className="flex items-start gap-3">
+              <CheckCircle size={22} className="flex-shrink-0 mt-1 text-green-500" />
+              <div className="flex-1 min-w-0">
+                <h4 className={`font-bold mb-2 text-base ${outputHeaderClasses[theme]}`}>
+                  ✓ HTML Preview
+                </h4>
+                <iframe 
+                  srcDoc={htmlPreview}
+                  className="w-full h-80 border rounded bg-white"
+                  title="HTML Preview"
+                  sandbox="allow-scripts"
+                />
               </div>
             </div>
           </div>

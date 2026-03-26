@@ -65,7 +65,15 @@ function simplifyError(errorText, language) {
       "undefined is not": "You're trying to use something that is undefined.",
       "Cannot read property": "You're trying to access a property of something that doesn't exist.",
       "is not a function": "You're trying to call something that isn't a function."
-    }
+    },
+    typescript: {
+      "error TS": "TypeScript found an error in your code. Check the error details carefully.",
+      "SyntaxError": "You have a syntax error. Check brackets, colons, and semicolons.",
+      "Cannot find name": "You're using a variable or function that hasn't been declared.",
+      "Type": "There's a type mismatch. Check that your types match what functions expect.",
+      "Property does not exist": "You're trying to access a property that doesn't exist.",
+      "is not assignable to type": "You're trying to assign a value of the wrong type."
+    },
   };
 
   let simplified = "An error occurred. ";
@@ -97,8 +105,9 @@ app.post("/run", async (req, res) => {
       // Write code to temporary file
       fs.writeFileSync("temp.py", code);
 
-      // Execute Python code
-      exec("python temp.py", { timeout: 5000 }, async (err, stdout, stderr) => {
+      // Execute Python code - try both python and python3
+      const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+      exec(`${pythonCmd} temp.py`, { timeout: 5000, maxBuffer: 10 * 1024 * 1024 }, async (err, stdout, stderr) => {
         // Clean up temp file
         try {
           fs.unlinkSync("temp.py");
@@ -107,7 +116,7 @@ app.post("/run", async (req, res) => {
         }
 
         if (err) {
-          const explanation = await getErrorExplanation(code, "python", stderr);
+          const explanation = await getErrorExplanation(code, "python", stderr || err.message);
           return res.json({
             error: explanation,
           });
@@ -144,8 +153,118 @@ app.post("/run", async (req, res) => {
           error: explanation,
         });
       }
+    } else if (language === "typescript") {
+      // Execute TypeScript using ts-node
+      fs.writeFileSync("temp.ts", code);
+
+      exec("ts-node temp.ts", { timeout: 5000, maxBuffer: 10 * 1024 * 1024 }, async (err, stdout, stderr) => {
+        try {
+          fs.unlinkSync("temp.ts");
+        } catch (e) {
+          console.log("Could not delete temp file");
+        }
+
+        if (err) {
+          const explanation = await getErrorExplanation(code, "typescript", stderr || err.message);
+          return res.json({
+            error: explanation,
+          });
+        }
+        
+        res.json({ output: stdout || "Code executed successfully" });
+      });
+    } else if (language === "java") {
+      // Execute Java code - wrap user code in main method if not present
+      let javaCode = code;
+      if (!code.includes("public static void main")) {
+        javaCode = `public class Main {
+  public static void main(String[] args) {
+    ${code.split('\n').map(line => '    ' + line).join('\n')}
+  }
+}`;
+      } else if (!code.includes("public class Main")) {
+        javaCode = `public class Main {
+${code.split('\n').map(line => '  ' + line).join('\n')}
+}`;
+      }
+
+      fs.writeFileSync("Main.java", javaCode);
+
+      exec(`javac Main.java && java Main`, { timeout: 5000 }, async (err, stdout, stderr) => {
+        // Clean up Java files
+        try {
+          fs.unlinkSync("Main.java");
+        } catch (e) {
+          console.log("Could not delete Main.java");
+        }
+        try {
+          fs.unlinkSync("Main.class");
+        } catch (e) {
+          console.log("Could not delete Main.class");
+        }
+
+        if (err) {
+          const explanation = await getErrorExplanation(code, "java", stderr || err.message);
+          return res.json({
+            error: explanation,
+          });
+        }
+        
+        res.json({ output: stdout || "Code executed successfully" });
+      });
+    } else if (language === "cpp") {
+      // Execute C++ code - cross-platform
+      fs.writeFileSync("temp.cpp", code);
+      
+      const isWindows = process.platform === 'win32';
+      const executableName = isWindows ? 'temp.exe' : 'temp';
+      const runCommand = isWindows ? 'temp.exe' : './temp';
+      const compileCommand = `g++ temp.cpp -o ${executableName} && ${runCommand}`;
+
+      exec(compileCommand, { timeout: 5000 }, async (err, stdout, stderr) => {
+        // Clean up temp files
+        try {
+          fs.unlinkSync("temp.cpp");
+        } catch (e) {
+          console.log("Could not delete temp.cpp");
+        }
+        try {
+          fs.unlinkSync(executableName);
+        } catch (e) {
+          console.log("Could not delete executable");
+        }
+
+        if (err) {
+          const explanation = await getErrorExplanation(code, "cpp", stderr || err.message);
+          return res.json({
+            error: explanation,
+          });
+        }
+        
+        res.json({ output: stdout || "Code executed successfully" });
+      });
+    } else if (language === "ruby") {
+      // Execute Ruby code
+      fs.writeFileSync("temp.rb", code);
+
+      exec("ruby temp.rb", { timeout: 5000, maxBuffer: 10 * 1024 * 1024 }, async (err, stdout, stderr) => {
+        try {
+          fs.unlinkSync("temp.rb");
+        } catch (e) {
+          console.log("Could not delete temp file");
+        }
+
+        if (err) {
+          const explanation = await getErrorExplanation(code, "ruby", stderr || err.message);
+          return res.json({
+            error: explanation,
+          });
+        }
+        
+        res.json({ output: stdout || "Code executed successfully" });
+      });
     } else {
-      res.json({ error: "Unsupported language" });
+      res.json({ error: "Unsupported language. Please select Python, JavaScript, TypeScript, Java, C++, or Ruby." });
     }
   } catch (e) {
     res.json({ 

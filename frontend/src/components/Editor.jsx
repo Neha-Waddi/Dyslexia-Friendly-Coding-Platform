@@ -5,7 +5,23 @@ import { AccessibilityContext } from "../context/AccessibilityContext.jsx";
 import useTTS from "../hooks/useTTS.js";
 import useSTT from "../hooks/useSTT.js";
 
-import { Play, Mic, Volume2, Copy, Trash2, Code2, Square } from "lucide-react";
+import { Play, Mic, Volume2, Copy, Trash2, Code2, Square, FileJson, Database, Zap, Palette } from "lucide-react";
+
+// Language configuration with proper icons
+const LANGUAGES = {
+  python: { label: "Python", icon: Code2 },
+  javascript: { label: "JavaScript", icon: FileJson },
+  typescript: { label: "TypeScript", icon: Code2 },
+  html: { label: "HTML/CSS", icon: Palette },
+  sql: { label: "SQL", icon: Database },
+  lua: { label: "Lua", icon: Zap },
+};
+
+const LanguageIcon = ({ language }) => {
+  const config = LANGUAGES[language];
+  const Icon = config?.icon || Code2;
+  return <Icon size={18} />;
+};
 
 // Function to remove special characters from code for speech
 const cleanCodeForSpeech = (text) => {
@@ -77,14 +93,18 @@ export default function Editor({
       <div className={`flex items-center gap-2 p-4 border-b ${editorHeaderThemeClasses[theme]}`}>
         {/* Language Selector */}
         <div className="flex items-center gap-2">
-          <Code2 size={18} />
+          <LanguageIcon language={language} />
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
             className={`px-3 py-2 rounded-lg font-medium ${editorSelectThemeClasses[theme]} focus:ring-2 focus:ring-blue-500 transition-all`}
           >
-            <option value="python">🐍 Python</option>
-            <option value="javascript">📜 JavaScript</option>
+            <option value="python">Python</option>
+            <option value="javascript">JavaScript</option>
+            <option value="typescript">TypeScript</option>
+            <option value="html">HTML/CSS</option>
+            <option value="sql">SQL</option>
+            <option value="lua">Lua</option>
           </select>
         </div>
 
