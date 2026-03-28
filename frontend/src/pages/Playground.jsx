@@ -1,16 +1,13 @@
 import { useState } from "react";
-import { runPython } from "../utils/runPython";
-// import generateFlowchart from "../../../backend/flowchart.js";
-
+import { useContext } from "react";
 
 import ControlPanel from "../components/ControlPanel.jsx";
 import Editor from "../components/Editor.jsx";
 import FlowchartView from "../components/FlowchartView.jsx";
 import OutputPanel from "../components/OutputPanel.jsx";
 import ErrorBoundary from "../components/ErrorBoundary.jsx";
-import { useContext } from "react";
 import { AccessibilityContext } from "../context/AccessibilityContext";
-
+import { runCode as executeCode } from "../utils/coderunner.js";
 
 export default function Playground() {
   const [code, setCode] = useState("");
@@ -19,6 +16,7 @@ export default function Playground() {
   const [error, setError] = useState("");
   const [explanation, setExplanation] = useState("");
   const [flowchart, setFlowchart] = useState("");
+  const [htmlPreview, setHtmlPreview] = useState("");
   const [editorHeight, setEditorHeight] = useState(50); // percentage
   const [editorWidth, setEditorWidth] = useState(70); // percentage of main area
   const { theme } = useContext(AccessibilityContext);
@@ -31,77 +29,52 @@ const themeClasses = {
 
 
   const runCode = async () => {
-  setOutput("");
-  setError("");
-  setExplanation("");
-  setFlowchart("");
+    setOutput("");
+    setError("");
+    setExplanation("Running code...");
+    setFlowchart("");
+    setHtmlPreview("");
 
-  try {
-    if (language === "javascript") {
-      let result = "";
-      const oldLog = console.log;
-
-      console.log = (...args) => {
-        result += args.join(" ") + "\n";
-      };
-
-      eval(code);
-      console.log = oldLog;
-
-      setOutput(result || "Code executed successfully");
-    } else {
-      const result = await runPython(code);
-      setOutput(result || "Python code executed successfully");
-    }
-
-    // Request code explanation from backend
     try {
-      const resp = await fetch("http://localhost:5000/explain", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, language }),
-      });
-      const data = await resp.json();
-      setExplanation(data.explanation || "Could not generate explanation.");
-    } catch (expErr) {
-      console.error("Explanation API error", expErr);
-      setExplanation("Could not generate explanation.");
-    }
+      // Run code in browser (Python via Pyodide, JavaScript via eval, etc.)
+      const result = await executeCode(code, language);
 
-    // Request accurate flowchart from backend parser
-    try {
-      const resp = await fetch("http://localhost:5000/flowchart", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      });
-      const data = await resp.json();
-      setFlowchart(data.chart || "");
-    } catch (fcErr) {
-      console.error("Flowchart API error", fcErr);
-      setFlowchart("");
-    }
+      if (result.success) {
+        if (language === "html" && result.isHtmlPreview) {
+          // Special handling for HTML preview
+          setHtmlPreview(result.preview);
+          setOutput("HTML rendered successfully");
+          setExplanation("✓ HTML preview loaded!");
+        } else {
+          setOutput(result.output || "Code executed successfully");
+          setExplanation("✓ Code executed successfully!");
+        }
+        setError("");
 
-  } catch (err) {
-    // Try to get simplified error explanation
-    try {
-      const resp = await fetch("http://localhost:5000/explain", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, language, error: err.message }),
-      });
-      const data = await resp.json();
-      if (data.explanation) {
-        setError(data.explanation);
+        // Generate flowchart for the code
+        try {
+          const flowchartResponse = await fetch("http://localhost:5000/flowchart", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code }),
+          });
+          const flowchartData = await flowchartResponse.json();
+          if (flowchartData.chart) {
+            setFlowchart(flowchartData.chart);
+          }
+        } catch (flowchartErr) {
+          console.error("Flowchart generation failed:", flowchartErr);
+        }
       } else {
-        setError("An error occurred, but could not generate explanation.");
+        setError(result.error || "Execution failed");
+        setExplanation("");
       }
-    } catch (expErr) {
-      console.error("Error explanation API error", expErr);
-      setError("An error occurred while running your code.");
+    } catch (err) {
+      setError("Execution error: " + err.message);
+      setExplanation("");
+      console.error("Runtime error:", err);
     }
-    }
-  }
+  };
 
 
   return (
@@ -161,7 +134,7 @@ const themeClasses = {
 
           <div style={{ height: `${100 - editorHeight}%` }} className="overflow-hidden">
             <ErrorBoundary>
-              <OutputPanel output={output} error={error} explanation={explanation} />
+              <OutputPanel output={output} error={error} explanation={explanation} htmlPreview={htmlPreview} />
             </ErrorBoundary>
           </div>
         </div>
