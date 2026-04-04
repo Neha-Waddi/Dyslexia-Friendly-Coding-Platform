@@ -9,6 +9,10 @@ export const SUPPORTED_LANGUAGES = {
   html: { browser: true, label: "HTML/CSS" },
   sql: { browser: true, label: "SQL" },
   lua: { browser: true, label: "Lua" },
+  c: { browser: false, backend: true, label: "C" },
+  cpp: { browser: false, backend: true, label: "C++" },
+  java: { browser: false, backend: true, label: "Java" },
+  csharp: { browser: false, backend: true, label: "C#" },
 };
 
 const ERROR_EXPLANATIONS = {
@@ -262,6 +266,34 @@ const executeHtml = (code) => {
   }
 };
 
+// ========== BACKEND-BASED EXECUTION (C, C++, Java, C# via Gemini API) ==========
+const executeViaBackend = async (code, language) => {
+  try {
+    const response = await fetch("http://localhost:5000/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, language }),
+    });
+
+    if (!response.ok) {
+      return { success: false, error: "Backend server error. Please check if it's running." };
+    }
+
+    const data = await response.json();
+
+    if (data.error) {
+      return { success: false, error: data.error };
+    }
+
+    return { success: true, output: data.output || "Code executed successfully" };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: `Cannot reach backend server at localhost:5000. Make sure the backend is running. Error: ${error.message}` 
+    };
+  }
+};
+
 // ========== MAIN EXECUTION FUNCTION ==========
 export const runCode = async (code, language) => {
   if (language === "javascript") {
@@ -286,6 +318,11 @@ export const runCode = async (code, language) => {
 
   if (language === "html") {
     return executeHtml(code);
+  }
+
+  // Backend-based languages
+  if (["c", "cpp", "java", "csharp"].includes(language)) {
+    return executeViaBackend(code, language);
   }
   
   return {

@@ -5,12 +5,30 @@ const { exec } = require("child_process");
 const axios = require("axios");
 const generateFlowchart = require("./flowchart");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { executeWithGemini, getGeminiErrorExplanation, generateFlowchartWithGemini } = require("./geminiExecutor");
 
 require('dotenv').config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+// Helper function to prepare Java code
+function prepareJavaCode(code) {
+  let javaCode = code;
+  if (!code.includes("public static void main")) {
+    javaCode = `public class Main {
+  public static void main(String[] args) {
+    ${code.split('\n').map(line => '    ' + line).join('\n')}
+  }
+}`;
+  } else if (!code.includes("public class Main")) {
+    javaCode = `public class Main {
+${code.split('\n').map(line => '  ' + line).join('\n')}
+}`;
+  }
+  return javaCode;
+}
+
 // Helper function to get error explanation
 async function getErrorExplanation(code, language, error) {
   try {
@@ -173,76 +191,6 @@ app.post("/run", async (req, res) => {
         
         res.json({ output: stdout || "Code executed successfully" });
       });
-    } else if (language === "java") {
-      // Execute Java code - wrap user code in main method if not present
-      let javaCode = code;
-      if (!code.includes("public static void main")) {
-        javaCode = `public class Main {
-  public static void main(String[] args) {
-    ${code.split('\n').map(line => '    ' + line).join('\n')}
-  }
-}`;
-      } else if (!code.includes("public class Main")) {
-        javaCode = `public class Main {
-${code.split('\n').map(line => '  ' + line).join('\n')}
-}`;
-      }
-
-      fs.writeFileSync("Main.java", javaCode);
-
-      exec(`javac Main.java && java Main`, { timeout: 5000 }, async (err, stdout, stderr) => {
-        // Clean up Java files
-        try {
-          fs.unlinkSync("Main.java");
-        } catch (e) {
-          console.log("Could not delete Main.java");
-        }
-        try {
-          fs.unlinkSync("Main.class");
-        } catch (e) {
-          console.log("Could not delete Main.class");
-        }
-
-        if (err) {
-          const explanation = await getErrorExplanation(code, "java", stderr || err.message);
-          return res.json({
-            error: explanation,
-          });
-        }
-        
-        res.json({ output: stdout || "Code executed successfully" });
-      });
-    } else if (language === "cpp") {
-      // Execute C++ code - cross-platform
-      fs.writeFileSync("temp.cpp", code);
-      
-      const isWindows = process.platform === 'win32';
-      const executableName = isWindows ? 'temp.exe' : 'temp';
-      const runCommand = isWindows ? 'temp.exe' : './temp';
-      const compileCommand = `g++ temp.cpp -o ${executableName} && ${runCommand}`;
-
-      exec(compileCommand, { timeout: 5000 }, async (err, stdout, stderr) => {
-        // Clean up temp files
-        try {
-          fs.unlinkSync("temp.cpp");
-        } catch (e) {
-          console.log("Could not delete temp.cpp");
-        }
-        try {
-          fs.unlinkSync(executableName);
-        } catch (e) {
-          console.log("Could not delete executable");
-        }
-
-        if (err) {
-          const explanation = await getErrorExplanation(code, "cpp", stderr || err.message);
-          return res.json({
-            error: explanation,
-          });
-        }
-        
-        res.json({ output: stdout || "Code executed successfully" });
-      });
     } else if (language === "ruby") {
       // Execute Ruby code
       fs.writeFileSync("temp.rb", code);
@@ -263,8 +211,48 @@ ${code.split('\n').map(line => '  ' + line).join('\n')}
         
         res.json({ output: stdout || "Code executed successfully" });
       });
+    } else if (language === "c") {
+      // Execute C code using Gemini API
+      const { output, error } = await executeWithGemini(code, "C");
+      
+      if (error) {
+        const explanation = await getGeminiErrorExplanation(code, "C", error);
+        return res.json({ error: explanation });
+      }
+      
+      res.json({ output: output || "Code executed successfully" });
+    } else if (language === "csharp") {
+      // Execute C# code using Gemini API
+      const { output, error } = await executeWithGemini(code, "C#");
+      
+      if (error) {
+        const explanation = await getGeminiErrorExplanation(code, "C#", error);
+        return res.json({ error: explanation });
+      }
+      
+      res.json({ output: output || "Code executed successfully" });
+    } else if (language === "java") {
+      // Execute Java code using Gemini API
+      const { output, error } = await executeWithGemini(code, "Java");
+      
+      if (error) {
+        const explanation = await getGeminiErrorExplanation(code, "Java", error);
+        return res.json({ error: explanation });
+      }
+      
+      res.json({ output: output || "Code executed successfully" });
+    } else if (language === "cpp") {
+      // Execute C++ code using Gemini API
+      const { output, error } = await executeWithGemini(code, "C++");
+      
+      if (error) {
+        const explanation = await getGeminiErrorExplanation(code, "C++", error);
+        return res.json({ error: explanation });
+      }
+      
+      res.json({ output: output || "Code executed successfully" });
     } else {
-      res.json({ error: "Unsupported language. Please select Python, JavaScript, TypeScript, Java, C++, or Ruby." });
+      res.json({ error: "Unsupported language. Please select Python, JavaScript, TypeScript, Java, C++, C, or C#." });
     }
   } catch (e) {
     res.json({ 
@@ -274,14 +262,21 @@ ${code.split('\n').map(line => '  ' + line).join('\n')}
 });
 
 // Flowchart endpoint
-app.post("/flowchart", (req, res) => {
+app.post("/flowchart", async (req, res) => {
   try {
-    const { code } = req.body;
+    const { code, language } = req.body;
     
     if (!code || code.trim().length === 0) {
       return res.json({ chart: "" });
     }
     
+    // For compiled languages (C, C++, Java, C#), use Gemini to generate flowchart
+    if (["c", "cpp", "csharp", "java"].includes(language)) {
+      const chart = await generateFlowchartWithGemini(code, language);
+      return res.json({ chart });
+    }
+    
+    // For other languages, use the existing flowchart generator
     const chart = generateFlowchart(code);
     res.json({ chart });
   } catch (error) {
@@ -349,9 +344,9 @@ Brief explanation (1-2 sentences only):`;
 
 // Convert code between languages
 app.post("/convert", async (req, res) => {
+  const { code, fromLanguage, toLanguage } = req.body;
+  
   try {
-    const { code, fromLanguage, toLanguage } = req.body;
-
     if (!code || code.trim().length === 0) {
       return res.json({ convertedCode: "" });
     }
@@ -383,7 +378,7 @@ Converted code (${toLanguage} only):`;
   } catch (error) {
     console.error("Code conversion error:", error);
     res.json({
-      convertedCode: code,
+      convertedCode: code || "",
       error: "Could not convert code. Code remains unchanged." 
     });
   }

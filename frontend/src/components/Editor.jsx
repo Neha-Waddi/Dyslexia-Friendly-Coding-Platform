@@ -12,6 +12,10 @@ const LANGUAGES = {
   python: { label: "Python", icon: Code2 },
   javascript: { label: "JavaScript", icon: FileJson },
   typescript: { label: "TypeScript", icon: Code2 },
+  java: { label: "Java", icon: Code2 },
+  cpp: { label: "C++", icon: Code2 },
+  c: { label: "C", icon: Code2 },
+  csharp: { label: "C#", icon: Code2 },
   html: { label: "HTML/CSS", icon: Palette },
 };
 
@@ -133,10 +137,20 @@ export default function Editor({
             disabled={isConverting}
             className={`px-3 py-2 rounded-lg font-medium ${editorSelectThemeClasses[theme]} focus:ring-2 focus:ring-blue-500 transition-all ${isConverting ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            <option value="python">Python</option>
-            <option value="javascript">JavaScript</option>
-            <option value="typescript">TypeScript</option>
-            <option value="html">HTML/CSS</option>
+            <optgroup label="Web & Dynamic">
+              <option value="python">Python</option>
+              <option value="javascript">JavaScript</option>
+              <option value="typescript">TypeScript</option>
+            </optgroup>
+            <optgroup label="Compiled & Systems">
+              <option value="java">Java</option>
+              <option value="cpp">C++</option>
+              <option value="c">C</option>
+              <option value="csharp">C#</option>
+            </optgroup>
+            <optgroup label="Markup">
+              <option value="html">HTML/CSS</option>
+            </optgroup>
           </select>
           {isConverting && (
             <span className={`text-sm font-medium animate-pulse ${
