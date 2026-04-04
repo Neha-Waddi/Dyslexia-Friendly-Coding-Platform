@@ -347,6 +347,48 @@ Brief explanation (1-2 sentences only):`;
   }
 });
 
+// Convert code between languages
+app.post("/convert", async (req, res) => {
+  try {
+    const { code, fromLanguage, toLanguage } = req.body;
+
+    if (!code || code.trim().length === 0) {
+      return res.json({ convertedCode: "" });
+    }
+
+    const prompt = `You are an expert code translator. Convert the following ${fromLanguage} code to ${toLanguage} code.
+IMPORTANT RULES:
+1. Maintain the exact same functionality and logic
+2. Use the most straightforward and beginner-friendly syntax for the target language
+3. Keep variable names the same
+4. Only output the converted code - NO explanations, NO comments, NO markdown
+5. For dyslexic learners, use clear and readable syntax
+
+Source code (${fromLanguage}):
+${code}
+
+Converted code (${toLanguage} only):`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const convertedCode = response.text().trim();
+
+    // Remove markdown code blocks if present
+    const cleanedCode = convertedCode
+      .replace(/^```[\w]*\n/, '')
+      .replace(/\n```$/, '')
+      .trim();
+
+    res.json({ convertedCode: cleanedCode });
+  } catch (error) {
+    console.error("Code conversion error:", error);
+    res.json({
+      convertedCode: code,
+      error: "Could not convert code. Code remains unchanged." 
+    });
+  }
+});
+
 // Health check endpoint
 app.get("/health", (req, res) => {
   res.json({ status: "ok", message: "Backend server is running" });
@@ -358,5 +400,7 @@ app.listen(PORT, () => {
   console.log(`📊 Endpoints available:`);
   console.log(`   POST /run - Execute code`);
   console.log(`   POST /flowchart - Generate flowchart`);
+  console.log(`   POST /convert - Convert code between languages`);
+  console.log(`   POST /explain - Explain code or errors`);
   console.log(`   GET /health - Health check`);
 });
