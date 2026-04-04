@@ -56,7 +56,7 @@ const themeClasses = {
           const flowchartResponse = await fetch(`${import.meta.env.VITE_API_URL}/flowchart`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code }),
+            body: JSON.stringify({ code, language }),
           });
           const flowchartData = await flowchartResponse.json();
           if (flowchartData.chart) {

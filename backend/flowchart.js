@@ -6,18 +6,19 @@ function generateFlowchart(code) {
   // Sanitize text for Mermaid - remove special characters that break syntax
   function sanitize(text) {
     return text
-      // Remove brackets and braces
+      // Remove brackets and braces (they break Mermaid node syntax)
       .replace(/[\[\]\(\)\{\}]/g, " ")
       // Remove quotes
       .replace(/["'`]/g, "")
-      // Convert operators to text to avoid | and & conflicts
+      // Convert logical operators to text to avoid | and & conflicts with Mermaid
       .replace(/\|\|/g, "or")
       .replace(/&&/g, "and")
       .replace(/[|&]/g, " ")
       // Replace common functions
-      .replace(/console\.log|print/gi, "Output")
-      // Remove other special characters that Mermaid can't handle
-      .replace(/[<>!={}[\]()@#$%^*+=:;~?`]/g, " ")
+      .replace(/console\.log/gi, "Output")
+      .replace(/print/g, "Output")
+      // Remove ONLY characters that actually break Mermaid (not operators)
+      .replace(/[<>:;~?@#$^`]/g, " ")
       // Collapse multiple spaces
       .replace(/\s+/g, " ")
       .trim()

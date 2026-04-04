@@ -12,6 +12,10 @@ const LANGUAGES = {
   python: { label: "Python", icon: Code2 },
   javascript: { label: "JavaScript", icon: FileJson },
   typescript: { label: "TypeScript", icon: Code2 },
+  java: { label: "Java", icon: Code2 },
+  cpp: { label: "C++", icon: Code2 },
+  c: { label: "C", icon: Code2 },
+  csharp: { label: "C#", icon: Code2 },
   html: { label: "HTML/CSS", icon: Palette },
 };
 
@@ -40,6 +44,7 @@ export default function Editor({
   const { fontFamily, fontSize, lineHeight, theme } = useContext(AccessibilityContext);
   const [copiedFeedback, setCopiedFeedback] = useState(false);
   const [isCodeSpeaking, setIsCodeSpeaking] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
 
   const monacoTheme = {
     dark: "vs-dark",
@@ -85,6 +90,40 @@ export default function Editor({
     }
   };
 
+  const handleLanguageChange = async (newLanguage) => {
+    setLanguage(newLanguage);
+
+    // If there's no code, just change the language without conversion
+    if (!code || code.trim().length === 0) {
+      return;
+    }
+
+    // Convert the code to the new language
+    setIsConverting(true);
+    try {
+      const response = await fetch("http://localhost:5000/convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          fromLanguage: language,
+          toLanguage: newLanguage,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.convertedCode) {
+        setCode(data.convertedCode);
+      } else if (data.error) {
+        console.error("Conversion error:", data.error);
+      }
+    } catch (error) {
+      console.error("Failed to convert code:", error);
+    } finally {
+      setIsConverting(false);
+    }
+  };
+
   return (
     <div className={`relative flex flex-col h-full w-full ${editorThemeClasses[theme]} border-r`}>
       {/* Header */}
@@ -94,14 +133,34 @@ export default function Editor({
           <LanguageIcon language={language} />
           <select
             value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            className={`px-3 py-2 rounded-lg font-medium ${editorSelectThemeClasses[theme]} focus:ring-2 focus:ring-blue-500 transition-all`}
+            onChange={(e) => handleLanguageChange(e.target.value)}
+            disabled={isConverting}
+            className={`px-3 py-2 rounded-lg font-medium ${editorSelectThemeClasses[theme]} focus:ring-2 focus:ring-blue-500 transition-all ${isConverting ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            <option value="python">Python</option>
-            <option value="javascript">JavaScript</option>
-            <option value="typescript">TypeScript</option>
-            <option value="html">HTML/CSS</option>
+            <optgroup label="Web & Dynamic">
+              <option value="python">Python</option>
+              <option value="javascript">JavaScript</option>
+              <option value="typescript">TypeScript</option>
+            </optgroup>
+            <optgroup label="Compiled & Systems">
+              <option value="java">Java</option>
+              <option value="cpp">C++</option>
+              <option value="c">C</option>
+              <option value="csharp">C#</option>
+            </optgroup>
+            <optgroup label="Markup">
+              <option value="html">HTML/CSS</option>
+            </optgroup>
           </select>
+          {isConverting && (
+            <span className={`text-sm font-medium animate-pulse ${
+              theme === 'dark' ? 'text-blue-400' :
+              theme === 'light' ? 'text-blue-600' :
+              'text-yellow-300'
+            }`}>
+              Converting...
+            </span>
+          )}
         </div>
 
         {/* Spacer */}
